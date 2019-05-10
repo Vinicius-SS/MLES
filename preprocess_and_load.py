@@ -9,7 +9,7 @@ def load_dataset(csv_path, dataset_location, **kwargs):
 
 	df = pd.read_csv(csv_path)
 
-	if 'debug' in kwargs:
+	if kwargs['debug']:
 		df = df.head(kwargs['debug'])
 
 	n_slices = 0
