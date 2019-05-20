@@ -20,6 +20,7 @@ def load_dataset(csv_path, dataset_location, **kwargs):
 	for i, row in df.iterrows():
 
 		f = row['filename']
+		if row['categorical'] == 'xxx': continue
 		y, sr = sf.read(os.path.join(dataset_location, f))
 
 		for factor in kwargs['resamples']:
