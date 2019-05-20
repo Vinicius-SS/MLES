@@ -39,7 +39,19 @@ datasets = list()
 for csv_path, datasets_root in kwargs['dataset']:
 
 	X, Y = pl.load_dataset(csv_path, datasets_root, **kwargs)
-	datasets.append((X, Y))
+	name = np.array([csv_path.split('/')[-1][:-4]] * len(Y))
+
+	Y = np.stack((Y, name), axis=1)
+
+	datasets.append((X, Y)) #, name))
+
+#	print(Y.shape)
+#	print(name.shape)
+#	print(np.stack((Y, name), axis=1).shape)
+
+#	print(Y)
+#	print(name)
+#	print(np.stack((Y, name), axis=1))
 
 X, Y = zip(*datasets)
 
@@ -53,17 +65,23 @@ lb = LabelEncoder()
 
 unique, counts = np.unique(Y, return_counts=True)
 
-Y = keras.utils.to_categorical(lb.fit_transform(Y))
-
 Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=kwargs['test_split'])
+
+Ytr_onehot = keras.utils.to_categorical(lb.fit_transform(Ytrain[:,0]))
+Yts_onehot = keras.utils.to_categorical(lb.fit_transform(Ytest[:,0]))
 
 # model
 
-model = models.vggish_like(Y.shape[1])
+Ytrain = Ytr_onehot
+Ytest  = Yts_onehot
+Ftrain = Ytrain[:,1]
+Ftest = Ytest[:,1]
+
+model = models.vggish_like(Ytrain.shape[1])
 
 model.summary()
 
-print(X.shape, Y.shape)
+print(X.shape, Y.shape, Ftrain.shape, Ftest.shape)
 print(lb.classes_)
 print(list(unique), list(counts))
 
