@@ -11,6 +11,17 @@ import audio_models as models
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from matplotlib import pyplot as plt
+
+# eliminate all entries which do not belong to 'name' dataset
+def filter_dataset(X, Y, F, name):
+
+	XYF = zip(X, Y, F)
+
+	filtered = [xyf for xyf in XYF if xyf[2] == name]
+	X, Y, F = zip(*filtered)
+
+	return np.array(X), np.array(Y), np.array(F)
 
 parser = argparse.ArgumentParser()
 
@@ -29,7 +40,7 @@ parser.add_argument('--retraining', type=bool, help='set whether to retrain pret
 
 # preprocessing (and possibly spectrogram generation) hyperparameters
 parser.add_argument('--resamples', type=float, help='Resampling ratios for data augmentation. E.g. 1.0 is the default, 1.2 is 20% faster (higher sampling rate)', default=[1.0], nargs='+')
-
+parser.add_argument('--sr', type=int, help='set sampling rate to load audio', default=16000)
 
 args = parser.parse_args()
 kwargs = vars(args)
@@ -43,15 +54,7 @@ for csv_path, datasets_root in kwargs['dataset']:
 
 	Y = np.stack((Y, name), axis=1)
 
-	datasets.append((X, Y)) #, name))
-
-#	print(Y.shape)
-#	print(name.shape)
-#	print(np.stack((Y, name), axis=1).shape)
-
-#	print(Y)
-#	print(name)
-#	print(np.stack((Y, name), axis=1))
+	datasets.append((X, Y))
 
 X, Y = zip(*datasets)
 
@@ -72,10 +75,10 @@ Yts_onehot = keras.utils.to_categorical(lb.fit_transform(Ytest[:,0]))
 
 # model
 
-Ytrain = Ytr_onehot
-Ytest  = Yts_onehot
 Ftrain = Ytrain[:,1]
 Ftest = Ytest[:,1]
+Ytrain = Ytr_onehot
+Ytest  = Yts_onehot
 
 model = models.vggish_like(Ytrain.shape[1])
 
@@ -99,5 +102,8 @@ Ypred = Ypred.argmax(axis=1)
 
 acc = stats.accuracy(Ytest, Ypred)
 print(f'Accuracy: {100*acc:.2f}%')
+stats.plot_confusion_matrix(Ytest, Ypred, lb.classes_)
+plt.show()
 
 code.interact(local=locals())
+
