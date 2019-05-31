@@ -14,8 +14,8 @@ def vggish_like(n_outputs):
 	model.add(Convolution2D(32, (3, 3), activation='relu', padding='same', name='conv2'))
 	model.add(MaxPooling2D((2, 2), strides=(2, 2), name='pool2'))
 
-	model.add(Convolution2D(32, (3, 3), activation='relu', padding='same', name='conv3/conv3_1'))
-	model.add(Convolution2D(32, (3, 3), activation='relu', padding='same', name='conv3/conv3_2'))
+	model.add(Convolution2D(64, (3, 3), activation='relu', padding='same', name='conv3/conv3_1'))
+	model.add(Convolution2D(64, (3, 3), activation='relu', padding='same', name='conv3/conv3_2'))
 	model.add(MaxPooling2D((2, 2), strides=(2, 2), name='pool3'))
 
 	model.add(Convolution2D(64, (3, 3), activation='relu', padding='same', name='conv4/conv4_1'))
