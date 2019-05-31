@@ -13,12 +13,23 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from matplotlib import pyplot as plt
 
-# eliminate all entries which do not belong to 'name' dataset
-def filter_dataset(X, Y, F, name):
+# filter entries according to the datasets they belong to
+# 'names' is a list with dataset names being used as filters
+# 'keep_or_drop' is a boolean indicating whether the filter
+# keeps (True) or drops (False) matching datasets
+
+def filter_dataset(X, Y, F, names, keep_or_drop=True):
 
 	XYF = zip(X, Y, F)
 
-	filtered = [xyf for xyf in XYF if xyf[2] == name]
+	filtered = list()
+
+	if keep_or_drop:
+		filtered = [xyf for xyf in XYF if xyf[2] in names]
+
+	else:
+		filtered = [xyf for xyf in XYF if xyf[2] not in names]
+
 	X, Y, F = zip(*filtered)
 
 	return np.array(X), np.array(Y), np.array(F)
@@ -39,8 +50,13 @@ parser.add_argument('--test_split', type=float, help='separate validation and te
 parser.add_argument('--retraining', type=bool, help='set whether to retrain pretrained layers or not', default=False)
 
 # preprocessing (and possibly spectrogram generation) hyperparameters
-parser.add_argument('--resamples', type=float, help='Resampling ratios for data augmentation. E.g. 1.0 is the default, 1.2 is 20% faster (higher sampling rate)', default=[1.0], nargs='+')
+parser.add_argument('--resamples', type=float, help='resampling ratios for data augmentation. E.g. 1.0 is the default, 1.2 is 20% faster (higher sampling rate)', default=[1.0], nargs='+')
 parser.add_argument('--sr', type=int, help='set sampling rate to load audio', default=16000)
+
+# evaluation
+parser.add_argument('--mono', help='perform mono-language tests (training and testing within the same dataset)', action='store_true', default=False)
+parser.add_argument('--cross', help='perform cross-language tests (training on all datasets but one and testing on the one left out', action='store_true', default=False)
+parser.add_argument('--multi', help='perform multi-language tests (training and testing on all datasets together', action='store_true', default=False)
 
 args = parser.parse_args()
 kwargs = vars(args)
@@ -73,37 +89,82 @@ Xtrain, Xtest, Ytrain, Ytest = train_test_split(X, Y, test_size=kwargs['test_spl
 Ytr_onehot = keras.utils.to_categorical(lb.fit_transform(Ytrain[:,0]))
 Yts_onehot = keras.utils.to_categorical(lb.fit_transform(Ytest[:,0]))
 
-# model
-
 Ftrain = Ytrain[:,1]
 Ftest = Ytest[:,1]
 Ytrain = Ytr_onehot
 Ytest  = Yts_onehot
 
-model = models.vggish_like(Ytrain.shape[1])
+# model
 
-model.summary()
+#print(X.shape, Y.shape, Ftrain.shape, Ftest.shape)
+#print(lb.classes_)
+#print(list(unique), list(counts))
 
-print(X.shape, Y.shape, Ftrain.shape, Ftest.shape)
-print(lb.classes_)
-print(list(unique), list(counts))
+unique, counts = np.unique(Ftrain, return_counts=True)
 
-opt = keras.optimizers.Adam(lr=kwargs['learning_rate'])
-model.compile(optimizer=opt, loss='categorical_crossentropy')
-model.fit(Xtrain, Ytrain, batch_size=kwargs['batch_size'], verbose=1, epochs=200,
-			validation_split=kwargs['val_split'], callbacks=models.callbacks())
+if kwargs['mono']:
 
-model.load_weights('ckpt.hdf5')
+	for dset in unique:
 
-Ypred = model.predict(Xtest)
+			Xtr, Ytr, _ = filter_dataset(Xtrain, Ytrain, Ftrain, [dset], True)
+			Xts, Yts, _ = filter_dataset(Xtest, Ytest, Ftest, [dset], True)
 
-Ytest = Ytest.argmax(axis=1)
-Ypred = Ypred.argmax(axis=1)
+			uniques_in_dset = Ytr.shape[1]
 
-acc = stats.accuracy(Ytest, Ypred)
-print(f'Accuracy: {100*acc:.2f}%')
-stats.plot_confusion_matrix(Ytest, Ypred, lb.classes_)
-plt.show()
+			model = models.vggish_like(uniques_in_dset)
 
-code.interact(local=locals())
+			opt = keras.optimizers.Adam(lr=kwargs['learning_rate'])
+			model.compile(optimizer=opt, loss='categorical_crossentropy')
+
+			model.fit(Xtr, Ytr, batch_size=kwargs['batch_size'], verbose=1, epochs=200,
+				validation_split=kwargs['val_split'], callbacks=models.callbacks())
+
+			model.load_weights('ckpt.hdf5')
+
+			Ypred = model.predict(Xts)
+
+			Yts = Yts.argmax(axis=1)
+			Ypred = Ypred.argmax(axis=1)
+
+			acc = stats.accuracy(Yts, Ypred)
+			print(f'Accuracy: {100*acc:.2f}%')
+			stats.plot_confusion_matrix(Yts, Ypred, lb.classes_, title=dset)
+			plt.savefig(f'../TCC/mono_images/{dset}_{100*acc:.2f}%.png')
+
+#plt.show()
+
+if kwargs['cross']:
+
+	for dset in unique:
+
+			# training data consists of every dataset but one
+			Xtr, Ytr, _ = filter_dataset(Xtrain, Ytrain, Ftrain, [dset], False)
+
+			# testing data is the dataset which was left out
+			Xts, Yts, _ = filter_dataset(Xtest, Ytest, Ftest, [dset], True)
+
+			uniques_in_dset = Ytr.shape[1]
+
+			model = models.vggish_like(uniques_in_dset)
+
+			opt = keras.optimizers.Adam(lr=kwargs['learning_rate'])
+			model.compile(optimizer=opt, loss='categorical_crossentropy')
+
+			model.fit(Xtr, Ytr, batch_size=kwargs['batch_size'], verbose=1, epochs=200,
+				validation_split=kwargs['val_split'], callbacks=models.callbacks())
+
+			model.load_weights('ckpt.hdf5')
+
+			Ypred = model.predict(Xts)
+
+			Yts = Yts.argmax(axis=1)
+			Ypred = Ypred.argmax(axis=1)
+
+			acc = stats.accuracy(Yts, Ypred)
+			print(f'Accuracy: {100*acc:.2f}%')
+			stats.plot_confusion_matrix(Yts, Ypred, lb.classes_, title=dset)
+			plt.savefig(f'../TCC/cross_images/{dset}_{100*acc:.2f}%.png')
+
+
+#code.interact(local=locals())
 
